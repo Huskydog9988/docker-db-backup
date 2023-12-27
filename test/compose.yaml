@@ -1,0 +1,26 @@
+services:
+  postgres1:
+    image: postgres
+    container_name: postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres
+    volumes:
+      # - ./postgres1:/var/lib/postgresql/data
+      - ./out/postgres1:/out
+
+  postgres2:
+    image: postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres
+    volumes:
+      # - ./postgres1:/var/lib/postgresql/data
+      - ./out/postgres2:/out
+
+  adminer:
+    image: adminer
+    ports:
+      - 8080:8080

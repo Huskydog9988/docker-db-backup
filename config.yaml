@@ -1,0 +1,22 @@
+config:
+  test: example
+
+jobs:
+  testRegex:
+    # Database type: postgres, mysql
+    dbType: postgres
+    # Match method: regex, exact
+    matchMethod: regex
+    # Match string
+    match: "^test-postgres"
+    # Cron schedule
+    cron: "*/5 * * * *"
+    # Output path for db dump
+    outPath: "/out/db.dump"
+
+  textExact:
+    dbType: postgres
+    matchMethod: exact
+    match: "postgres"
+    cron: "*/5 * * * *"
+    outPath: "/out/db.dump"
