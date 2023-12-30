@@ -3,11 +3,14 @@ package main
 import (
 	"context"
 	"os"
+	"os/signal"
+	"syscall"
 	"unicode/utf8"
 
 	"github.com/dlclark/regexp2"
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/client"
+	"github.com/go-co-op/gocron/v2"
 	"github.com/knadh/koanf/parsers/yaml"
 	"github.com/knadh/koanf/providers/file"
 	"github.com/knadh/koanf/v2"
@@ -42,11 +45,18 @@ func main() {
 
 	// Load yaml config.
 	if err := k.Load(file.Provider("config.yaml"), yaml.Parser()); err != nil {
-		log.Fatalf("error loading config: %v", err)
+		log.Fatal(eris.Wrap(err, "failed to load config"))
 	}
 
 	// create backup folder
 	createBackupFolder()
+
+	// create a scheduler
+	s, err := gocron.NewScheduler()
+	if err != nil {
+		log.Fatal(eris.Wrap(err, "failed to create scheduler"))
+	}
+	defer func() { _ = s.Shutdown() }()
 
 	// create docker client
 	log.Debug("Creating docker client")
@@ -59,42 +69,56 @@ func main() {
 	// get a list of every job
 	jobs := k.MapKeys("jobs")
 
-	ctx := context.Background()
+	// schedule each job
 	for _, job := range jobs {
-		log.Infof("Processing job: %s", job)
+		log.Infof("Scheduling job: %s", job)
 
 		jobConfig := &JobConfig{
 			Name:   job,
 			Config: k.StringMap("jobs." + job),
 		}
 
-		log.Debug("Listing containers")
-		// gets a list of running containers
-		containers, err := cli.ContainerList(ctx, types.ContainerListOptions{})
+		_, err := s.NewJob(gocron.CronJob(jobConfig.Config["cron"], false), gocron.NewTask(backupJob, jobConfig, cli))
 		if err != nil {
-			log.Fatal(eris.Wrap(err, "failed to list containers"))
-		}
-
-		targetIds := []string{}
-
-		for _, container := range containers {
-			if isTargetContainer(container, jobConfig) {
-				targetIds = append(targetIds, container.ID)
-			}
-		}
-
-		log.Infof("Found %d target container(s) for job %s", len(targetIds), job)
-
-		for _, target := range targetIds {
-			ctx := context.Background()
-			backupContainer(ctx, &BackupContainerOptions{
-				ContainerId: target,
-				JobConfig:   jobConfig,
-				Cli:         cli,
-			})
+			log.Fatal(eris.Wrapf(err, "failed to schedule job %s", jobConfig.Name))
 		}
 	}
 
+	// start the scheduler
+	s.Start()
+
+	// wait for a signal to end the program
+	endSignal := make(chan os.Signal, 1)
+	signal.Notify(endSignal, syscall.SIGINT, syscall.SIGTERM)
+	<-endSignal
+}
+
+func backupJob(jobConfig *JobConfig, cli *client.Client) {
+	ctx := context.Background()
+	log.Debug("Listing containers")
+	// gets a list of running containers
+	containers, err := cli.ContainerList(ctx, types.ContainerListOptions{})
+	if err != nil {
+		log.Fatal(eris.Wrap(err, "failed to list containers"))
+	}
+
+	targetIds := []string{}
+
+	for _, container := range containers {
+		if isTargetContainer(container, jobConfig) {
+			targetIds = append(targetIds, container.ID)
+		}
+	}
+
+	log.Infof("Found %d target container(s) for job %s", len(targetIds), jobConfig.Name)
+
+	for _, target := range targetIds {
+		backupContainer(ctx, &BackupContainerOptions{
+			ContainerId: target,
+			JobConfig:   jobConfig,
+			Cli:         cli,
+		})
+	}
 }
 
 // test if a container is the target container
