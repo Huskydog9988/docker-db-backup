@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"time"
 
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/client"
@@ -135,9 +134,26 @@ func getBackupCommand(jobConfig *JobConfig) []string {
 }
 
 func getBackupFileName(jobConfig *JobConfig, containerName string) string {
-	currentTime := time.Now()
+	// currentTime := time.Now()
 
-	currentTime.Format("2006-01-02T15_04_05")
+	// currentTime.Format("2006-01-02T15_04_05")
 
-	return fmt.Sprintf("dump_%s_%s_%s.out", jobConfig.Name, containerName, currentTime.Format("2006-01-02T15_04_05"))
+	// return fmt.Sprintf("dump_%s_%s_%s.out", jobConfig.Name, containerName, currentTime.Format("2006-01-02T15_04_05"))
+
+	return fmt.Sprintf("%s/%s.dump", k.String("config.dumpFolder"), jobConfig.Name)
+}
+
+// create the folder to store the backups in
+func createBackupFolder() {
+	// ensure key exists
+	if !k.Exists("config.dumpFoler") {
+		log.Info("No dump folder specified, using default")
+		k.Set("config.dumpFolder", "./out")
+	}
+	log.Infof("Setting dump folder to %s", k.String("config.dumpFolder"))
+
+	err := os.MkdirAll(k.String("config.dumpFolder"), os.ModePerm)
+	if err != nil {
+		log.Panic(eris.Wrap(err, "failed to create dump folder"))
+	}
 }

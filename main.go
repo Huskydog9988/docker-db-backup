@@ -20,6 +20,9 @@ type JobConfig struct {
 	Config map[string]string
 }
 
+// Global koanf instance. Use "." as the key path delimiter. This can be "/" or any character.
+var k = koanf.New(".")
+
 func init() {
 	// Log as JSON instead of the default ASCII formatter.
 	// log.SetFormatter(&log.JSONFormatter{})
@@ -34,9 +37,6 @@ func init() {
 	log.SetLevel(log.DebugLevel)
 }
 
-// Global koanf instance. Use "." as the key path delimiter. This can be "/" or any character.
-var k = koanf.New(".")
-
 func main() {
 	log.Info("Starting backup service")
 
@@ -44,6 +44,9 @@ func main() {
 	if err := k.Load(file.Provider("config.yaml"), yaml.Parser()); err != nil {
 		log.Fatalf("error loading config: %v", err)
 	}
+
+	// create backup folder
+	createBackupFolder()
 
 	// create docker client
 	log.Debug("Creating docker client")
