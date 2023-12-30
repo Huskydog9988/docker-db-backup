@@ -33,6 +33,8 @@ jobs:
     cron: "*/5 * * * *"
 ```
 
+> [Config.yaml](config.yaml) serves as another example used in testing if you want to see more practical usage
+
 The script looks for the config file in the same directory it is being run from. Or in other words, the current working directory.
 
 ## Example usage
@@ -43,6 +45,9 @@ The script looks for the config file in the same directory it is being run from.
 
 # Run the script
 go run .
+
+# Or use the docker image
+docker run --rm -it -v "$PWD:$PWD" -w "$PWD" ghcr.io/huskydog9988/docker-db-backup:latest
 ```
 
 The script will then dump the databases to the `out` folder, and continue to run every 5 minutes because of the cron option.
