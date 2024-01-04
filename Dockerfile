@@ -1,31 +1,33 @@
-FROM golang:1.21-bookworm as builder
+# syntax=docker/dockerfile:1
+
+FROM golang:1.21-alpine AS BUILD
+ARG Release=dev
+
+RUN apk add build-base alpine-sdk
 
 WORKDIR /app
 
-# Retrieve application dependencies.
-# This allows the container build to reuse cached dependencies.
-# Expecting to copy go.mod and if present go.sum.
+# RUN apk update && apk add --no-cache musl-dev gcc build-base
+
+# pre-copy/cache go.mod for pre-downloading dependencies and only redownloading them in subsequent builds if they change
 COPY go.* ./
-RUN go mod download
+RUN go mod download && go mod verify
 
-ENV APP_ENV production
+# don't look for dynamic libraries (like c libraries) since we're building a static binary
+ENV CGO_ENABLED false
 
-# Copy local code to the container image.
+# fix for sqlite3 not building on alpine
+# https://github.com/mattn/go-sqlite3/issues/1164#issuecomment-1635253695
+ENV CGO_CFLAGS "-D_LARGEFILE64_SOURCE"
+
 COPY . ./
+# based on https://www.cloudbees.com/blog/building-minimal-docker-containers-for-go-applications
+RUN go build -a -installsuffix cgo -v -o /app/server .
 
-# Build the binary.
-RUN go build -v -o server
+FROM alpine as deployment
 
-# Use the official Debian slim image for a lean production container.
-# https://hub.docker.com/_/debian
-# https://docs.docker.com/develop/develop-images/multistage-build/#use-multi-stage-builds
-FROM debian:bookworm-slim
-RUN set -x && apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y \
-    ca-certificates && \
-    rm -rf /var/lib/apt/lists/*
+WORKDIR /app
 
-# Copy the binary to the production image from the builder stage.
-COPY --from=builder /app/server /app/server
+COPY --from=BUILD /app/server /app/server
 
-# Run the web service on container startup.
-CMD ["/app/server"]
+ENTRYPOINT ["/app/server"]
