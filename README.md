@@ -23,6 +23,8 @@ jobs:
     # Cron schedule
     # run every 5 minutes
     cron: "*/5 * * * *"
+    # allows you to specify a custom db user for cmd to use
+    dbUser: "postgres"
 
   # job name
   textExact:

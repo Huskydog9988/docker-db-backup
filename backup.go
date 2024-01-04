@@ -86,7 +86,7 @@ func backupContainer(ctx context.Context, options *BackupContainerOptions) {
 			// stdOutReader.Close()
 			log.Fatal(eris.Wrap(err, "failed to read output from exec"))
 		}
-		// log.Debug("Finished reading output from exec")
+		log.Debug("Finished reading output from exec")
 		// stdOutReader.Close()
 		break
 
@@ -119,13 +119,24 @@ func backupContainer(ctx context.Context, options *BackupContainerOptions) {
 		}
 		log.Info(string(stderr))
 
-		log.Fatalf("Failed to backup %s, exec failed with exit code %d", options.ContainerId, res.ExitCode)
+		log.Errorf("Failed to backup %s, exec failed with exit code %d", options.ContainerId, res.ExitCode)
 	}
+
+	log.Infof("Finished backing up container %s", options.ContainerId)
 }
 
 func getBackupCommand(jobConfig *JobConfig) []string {
 	if jobConfig.Config["dbType"] == "postgres" {
-		return []string{"pg_dumpall", "-c", "-w", "-U", "postgres"}
+		pgUser := "postgres"
+		if jobConfig.Config["dbUser"] != "" {
+
+			log.Debugf("Using custom postgres user: %s", jobConfig.Config["dbUser"])
+			pgUser = jobConfig.Config["dbUser"]
+		} else {
+			log.Debugf("Using default postgres user: %s", jobConfig.Config["dbUser"])
+		}
+
+		return []string{"pg_dumpall", "-c", "-w", "-U", pgUser}
 	}
 
 	// log.Info("pg_dumpall -c -U postgres > dump_`date +%Y-%m-%d\"_\"%H_%M_%S`.sql")
