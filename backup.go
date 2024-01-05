@@ -14,47 +14,67 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+type Backup struct {
+	// docker client
+	Cli         *client.Client
+	backupQueue chan struct{}
+}
+
+func NewBackup(cli *client.Client) *Backup {
+	return &Backup{
+		Cli:         cli,
+		backupQueue: make(chan struct{}, getJobLimit()),
+	}
+}
+
 type BackupContainerOptions struct {
 	// container id to backup
 	ContainerId string
 	// config for this job
 	JobConfig *JobConfig
-	// docker client
-	Cli *client.Client
 }
 
-func backupContainer(ctx context.Context, options *BackupContainerOptions) {
+func (b Backup) backupContainer(ctx context.Context, options *BackupContainerOptions) {
 	log.Infof("Backing up container %s", options.ContainerId)
+	// tell queue an item left after we're done
+	defer func() {
+		<-b.backupQueue
+		log.Debugf("Removed %s from queue", options.ContainerId)
+	}()
 
 	// create exec for container
 	log.Debugf("Creating exec for container %s", options.ContainerId)
-	execIDRes, err := options.Cli.ContainerExecCreate(ctx, options.ContainerId, types.ExecConfig{
+	execIDRes, err := b.Cli.ContainerExecCreate(ctx, options.ContainerId, types.ExecConfig{
 		AttachStderr: true,
 		AttachStdout: true,
 		Cmd:          getBackupCommand(options.JobConfig),
 	})
 	if err != nil {
-		log.Fatal(eris.Wrap(err, "failed to create exec for docker container"))
+		log.Error(eris.Wrap(err, "failed to create exec for docker container"))
+		return
 	}
 
 	// attach to exec
 	log.Debugf("Attaching to exec for container %s", options.ContainerId)
-	highjackRes, err := options.Cli.ContainerExecAttach(ctx, execIDRes.ID, types.ExecStartCheck{})
+	highjackRes, err := b.Cli.ContainerExecAttach(ctx, execIDRes.ID, types.ExecStartCheck{})
 	if err != nil {
-		log.Fatal(eris.Wrap(err, "failed to attach to exec for docker container"))
+		log.Error(eris.Wrap(err, "failed to attach to exec for docker container"))
+		return
 	}
 	defer highjackRes.Close()
 
-	targetContainer, err := options.Cli.ContainerInspect(ctx, options.ContainerId)
+	targetContainer, err := b.Cli.ContainerInspect(ctx, options.ContainerId)
 	if err != nil {
-		log.Fatal(eris.Wrap(err, "failed to inspect container"))
+		log.Error(eris.Wrap(err, "failed to inspect container"))
+		return
 	}
 
 	// create dump file
 	log.Debug("Creating dump file")
 	dumpFile, err := os.Create(getBackupFileName(options.JobConfig, preprocesContainerName(targetContainer.Name)))
 	if err != nil {
-		log.Panic(eris.Wrap(err, "failed to create file"))
+		log.Error(eris.Wrap(err, "failed to create file"))
+		return
 	}
 	defer dumpFile.Close()
 
@@ -84,7 +104,7 @@ func backupContainer(ctx context.Context, options *BackupContainerOptions) {
 	case err := <-outputDone:
 		if err != nil {
 			// stdOutReader.Close()
-			log.Fatal(eris.Wrap(err, "failed to read output from exec"))
+			log.Error(eris.Wrap(err, "failed to read output from exec"))
 		}
 		log.Debug("Finished reading output from exec")
 		// stdOutReader.Close()
@@ -92,7 +112,8 @@ func backupContainer(ctx context.Context, options *BackupContainerOptions) {
 
 	case <-ctx.Done():
 		if ctx.Err() != nil {
-			log.Fatal(eris.Wrap(err, "context cancelled"))
+			log.Error(eris.Wrap(err, "context cancelled"))
+			return
 		}
 	}
 
@@ -101,10 +122,11 @@ func backupContainer(ctx context.Context, options *BackupContainerOptions) {
 	// 	log.Fatal(eris.Wrap(err, "failed to read stdout on exec"))
 	// }
 
-	res, err := options.Cli.ContainerExecInspect(ctx, execIDRes.ID)
+	res, err := b.Cli.ContainerExecInspect(ctx, execIDRes.ID)
 	if err != nil {
 		if err != nil {
-			log.Fatal(eris.Wrap(err, "failed to inspect exec"))
+			log.Error(eris.Wrap(err, "failed to inspect exec"))
+			return
 		}
 	}
 
@@ -115,11 +137,12 @@ func backupContainer(ctx context.Context, options *BackupContainerOptions) {
 		// read error stderr
 		stderr, err := io.ReadAll(&errBuf)
 		if err != nil {
-			log.Fatal(eris.Wrap(err, "failed to read stderr on exec"))
+			log.Error(eris.Wrap(err, "failed to read stderr on exec"))
 		}
-		log.Info(string(stderr))
+		log.Error(string(stderr))
 
 		log.Errorf("Failed to backup %s, exec failed with exit code %d", options.ContainerId, res.ExitCode)
+		return
 	}
 
 	log.Infof("Finished backing up container %s", options.ContainerId)
@@ -167,4 +190,12 @@ func createBackupFolder() {
 	if err != nil {
 		log.Panic(eris.Wrap(err, "failed to create dump folder"))
 	}
+}
+
+func getJobLimit() int {
+	if k.Exists("config.jobLimit") {
+		return k.Int("config.jobLimit")
+	}
+
+	return 1
 }

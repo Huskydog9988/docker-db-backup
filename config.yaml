@@ -1,5 +1,9 @@
 config:
+  # folder where the dump files will be stored
   dumpFolder: "./out"
+
+  # optional: allows you to specify the max number of jobs to run at once
+  jobLimit: 1
 
 jobs:
   testRegex:

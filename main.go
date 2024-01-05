@@ -58,6 +58,8 @@ func main() {
 	}
 	defer cli.Close()
 
+	backup := NewBackup(cli)
+
 	// get a list of every job
 	jobs := k.MapKeys("jobs")
 
@@ -70,7 +72,7 @@ func main() {
 			Config: k.StringMap("jobs." + job),
 		}
 
-		_, err := s.NewJob(gocron.CronJob(jobConfig.Config["cron"], false), gocron.NewTask(backupJob, jobConfig, cli))
+		_, err := s.NewJob(gocron.CronJob(jobConfig.Config["cron"], false), gocron.NewTask(backup.QueueJob, jobConfig))
 		if err != nil {
 			log.Fatal(eris.Wrapf(err, "failed to schedule job %s", jobConfig.Name))
 		}
@@ -85,17 +87,17 @@ func main() {
 	<-endSignal
 }
 
-func backupJob(jobConfig *JobConfig, cli *client.Client) {
+func (b Backup) QueueJob(jobConfig *JobConfig) {
 	ctx := context.Background()
 	log.Debug("Listing containers")
 	// gets a list of running containers
-	containers, err := cli.ContainerList(ctx, types.ContainerListOptions{})
+	containers, err := b.Cli.ContainerList(ctx, types.ContainerListOptions{})
 	if err != nil {
-		log.Fatal(eris.Wrap(err, "failed to list containers"))
+		log.Error(eris.Wrap(err, "failed to list containers"))
+		return
 	}
 
 	targetIds := []string{}
-
 	for _, container := range containers {
 		if isTargetContainer(container, jobConfig) {
 			targetIds = append(targetIds, container.ID)
@@ -103,12 +105,13 @@ func backupJob(jobConfig *JobConfig, cli *client.Client) {
 	}
 
 	log.Infof("Found %d target container(s) for job %s", len(targetIds), jobConfig.Name)
-
 	for _, target := range targetIds {
-		backupContainer(ctx, &BackupContainerOptions{
+		log.Infof("Queueing backup for container %s", target)
+		// tell queue an item entered
+		b.backupQueue <- struct{}{}
+		b.backupContainer(ctx, &BackupContainerOptions{
 			ContainerId: target,
 			JobConfig:   jobConfig,
-			Cli:         cli,
 		})
 	}
 }

@@ -11,6 +11,9 @@ config:
   # folder where the dump files will be stored
   dumpFolder: "./out"
 
+  # optional: allows you to specify the max number of jobs to run at once
+  jobLimit: 1
+
 jobs:
   # job name
   testRegex:
@@ -40,6 +43,8 @@ jobs:
 The script looks for the config file in the same directory it is being run from. Or in other words, the current working directory.
 
 ## Example usage
+
+(Assuming you have the repo cloned)
 
 ```bash
 # Start test containers
