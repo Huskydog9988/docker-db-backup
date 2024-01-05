@@ -151,7 +151,7 @@ func getBackupFileName(jobConfig *JobConfig, containerName string) string {
 
 	// return fmt.Sprintf("dump_%s_%s_%s.out", jobConfig.Name, containerName, currentTime.Format("2006-01-02T15_04_05"))
 
-	return fmt.Sprintf("%s/%s.dump", k.String("config.dumpFolder"), jobConfig.Name)
+	return fmt.Sprintf("%s/%s.dump", k.String("config.dumpFolder"), containerName)
 }
 
 // create the folder to store the backups in
