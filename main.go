@@ -11,9 +11,6 @@ import (
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/client"
 	"github.com/go-co-op/gocron/v2"
-	"github.com/knadh/koanf/parsers/yaml"
-	"github.com/knadh/koanf/providers/file"
-	"github.com/knadh/koanf/v2"
 	"github.com/rotisserie/eris"
 	log "github.com/sirupsen/logrus"
 )
@@ -22,9 +19,6 @@ type JobConfig struct {
 	Name   string
 	Config map[string]string
 }
-
-// Global koanf instance. Use "." as the key path delimiter. This can be "/" or any character.
-var k = koanf.New(".")
 
 func init() {
 	// Log as JSON instead of the default ASCII formatter.
@@ -43,10 +37,8 @@ func init() {
 func main() {
 	log.Info("Starting backup service")
 
-	// Load yaml config.
-	if err := k.Load(file.Provider("config.yaml"), yaml.Parser()); err != nil {
-		log.Fatal(eris.Wrap(err, "failed to load config"))
-	}
+	// load config file
+	loadConfigFile()
 
 	// create backup folder
 	createBackupFolder()
