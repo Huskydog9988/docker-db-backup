@@ -157,7 +157,7 @@ func getBackupFileName(jobConfig *JobConfig, containerName string) string {
 // create the folder to store the backups in
 func createBackupFolder() {
 	// ensure key exists
-	if !k.Exists("config.dumpFoler") {
+	if !k.Exists("config.dumpFolder") {
 		log.Info("No dump folder specified, using default")
 		k.Set("config.dumpFolder", "./out")
 	}
