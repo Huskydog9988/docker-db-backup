@@ -1,0 +1,14 @@
+services:
+  dbbackup:
+    # image: ghcr.io/huskydog9988/docker-db-backup
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: dbBackup
+    restart: always
+    volumes:
+      - ./config.yaml:/etc/docker-db-backup/config.yaml:ro
+      - ./out:/out
+      - /var/run/docker.sock:/var/run/docker.sock
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
