@@ -42,12 +42,17 @@ func (b Backup) backupContainer(ctx context.Context, options *BackupContainerOpt
 		log.Debugf("Removed %s from queue", options.ContainerId)
 	}()
 
+	backupCmd, dbPassword := getBackupCommand(options.JobConfig)
+
 	// create exec for container
 	log.Debugf("Creating exec for container %s", options.ContainerId)
 	execIDRes, err := b.Cli.ContainerExecCreate(ctx, options.ContainerId, types.ExecConfig{
 		AttachStderr: true,
 		AttachStdout: true,
-		Cmd:          getBackupCommand(options.JobConfig),
+		Cmd:          backupCmd,
+
+		// if we have a password, we need to attach stdin
+		AttachStdin: dbPassword != "",
 	})
 	if err != nil {
 		log.Error(eris.Wrap(err, "failed to create exec for docker container"))
@@ -100,6 +105,11 @@ func (b Backup) backupContainer(ctx context.Context, options *BackupContainerOpt
 		outputDone <- err
 	}()
 
+	if dbPassword != "" {
+		// write password to stdin
+		highjackRes.Conn.Write([]byte(dbPassword + "\n"))
+	}
+
 	select {
 	case err := <-outputDone:
 		if err != nil {
@@ -148,8 +158,14 @@ func (b Backup) backupContainer(ctx context.Context, options *BackupContainerOpt
 	log.Infof("Finished backing up container %s", options.ContainerId)
 }
 
-func getBackupCommand(jobConfig *JobConfig) []string {
+// The backup command to run in the container
+// Also returns the password for the database if needed
+func getBackupCommand(jobConfig *JobConfig) ([]string, string) {
 	if jobConfig.Config["dbType"] == "postgres" {
+
+		cmd := []string{"pg_dump", "-c", "-w"}
+
+		// default to postgres user
 		pgUser := "postgres"
 		if jobConfig.Config["dbUser"] != "" {
 
@@ -158,13 +174,18 @@ func getBackupCommand(jobConfig *JobConfig) []string {
 		} else {
 			log.Debugf("Using default postgres user: %s", jobConfig.Config["dbUser"])
 		}
+		cmd = append(cmd, "-U", pgUser)
 
-		return []string{"pg_dumpall", "-c", "-w", "-U", pgUser}
+		// if we have a password, we need to pass it to the command
+		if jobConfig.Config["dbPassword"] != "" {
+			cmd = append(cmd, "--password")
+		}
+
+		// https://www.postgresql.org/docs/current/app-pg-dumpall.html
+		return cmd, jobConfig.Config["dbPassword"]
 	}
 
-	// log.Info("pg_dumpall -c -U postgres > dump_`date +%Y-%m-%d\"_\"%H_%M_%S`.sql")
-
-	return []string{"echo", "hello world"}
+	return []string{"echo", "Unknown db type"}, ""
 }
 
 func getBackupFileName(jobConfig *JobConfig, containerName string) string {

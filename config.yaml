@@ -7,7 +7,7 @@ config:
 
 jobs:
   testRegex:
-    # Database type: postgres, mysql
+    # Database type: postgres, mysql, mariadb
     dbType: postgres
     # Match method: regex, exact
     matchMethod: regex
@@ -17,9 +17,11 @@ jobs:
     cron: "*/5 * * * *"
     # optional: allows you to specify a custom db user for cmd to use
     dbUser: "postgres"
+    # optional: allows you to specify a custom db password for cmd to use
+    # postgres shouldn't need this, but mysql and mariadb will
+    dbPassword: "postgres"
 
   # optional: you can specify multiple jobs
-
   textExact:
     dbType: postgres
     matchMethod: exact
