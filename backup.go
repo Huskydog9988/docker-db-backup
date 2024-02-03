@@ -163,7 +163,7 @@ func (b Backup) backupContainer(ctx context.Context, options *BackupContainerOpt
 func getBackupCommand(jobConfig *JobConfig) ([]string, string) {
 	if jobConfig.Config["dbType"] == "postgres" {
 
-		cmd := []string{"pg_dump", "-c", "-w"}
+		cmd := []string{"pg_dump"}
 
 		// default to postgres user
 		pgUser := "postgres"
@@ -184,6 +184,12 @@ func getBackupCommand(jobConfig *JobConfig) ([]string, string) {
 		// https://www.postgresql.org/docs/current/app-pg-dumpall.html
 		return cmd, jobConfig.Config["dbPassword"]
 	}
+
+	// if jobConfig.Config["dbType"] == "mariadb" {
+	// 	cmd := []string{"mariadb-dump"}
+
+	// 	return cmd, jobConfig.Config["dbPassword"]
+	// }
 
 	return []string{"echo", "Unknown db type"}, ""
 }
