@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
@@ -14,6 +15,9 @@ import (
 	"github.com/rotisserie/eris"
 	log "github.com/sirupsen/logrus"
 )
+
+// array of job names
+var jobs []string
 
 type JobConfig struct {
 	Name   string
@@ -61,20 +65,33 @@ func main() {
 	backup := NewBackup(cli)
 
 	// get a list of every job
-	jobs := k.MapKeys("jobs")
+	jobs = k.MapKeys("jobs")
+
+	// start the http server
+	// also handles if it is disabled
+	httpServer := &http.Server{
+		Addr: ":3333",
+	}
+	go startHttpServer(httpServer, backup)
+	defer func() {
+		err := httpServer.Shutdown(context.Background())
+		if err != nil {
+			log.Error(eris.Wrap(err, "failed to shutdown http server"))
+		}
+	}()
 
 	// schedule each job
 	for _, job := range jobs {
 		log.Infof("Scheduling job: %s", job)
 
-		jobConfig := &JobConfig{
-			Name:   job,
-			Config: k.StringMap("jobs." + job),
+		jobConfig, err := getJobConfig(job)
+		if err != nil {
+			log.Error(eris.Wrapf(err, "failed to get job config for %s", job))
 		}
 
-		_, err := s.NewJob(gocron.CronJob(jobConfig.Config["cron"], false), gocron.NewTask(backup.QueueJob, jobConfig))
+		_, err = s.NewJob(gocron.CronJob(jobConfig.Config["cron"], false), gocron.NewTask(backup.QueueJob, jobConfig))
 		if err != nil {
-			log.Fatal(eris.Wrapf(err, "failed to schedule job %s", jobConfig.Name))
+			log.Error(eris.Wrapf(err, "failed to schedule job %s", jobConfig.Name))
 		}
 	}
 
@@ -176,4 +193,15 @@ func preprocesContainerName(name string) string {
 	// remove the leading slash on container names
 	_, i := utf8.DecodeRuneInString(name)
 	return name[i:]
+}
+
+func getJobConfig(name string) (*JobConfig, error) {
+	if !k.Exists("jobs." + name) {
+		return nil, eris.Errorf("Job %s does not exist", name)
+	}
+
+	return &JobConfig{
+		Name:   name,
+		Config: k.StringMap("jobs." + name),
+	}, nil
 }
