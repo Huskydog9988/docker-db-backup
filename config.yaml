@@ -5,6 +5,10 @@ config:
   # optional: allows you to specify the max number of jobs to run at once
   jobLimit: 1
 
+  # optional: allows you start an http server and trigger jobs via an api
+  httpServer:
+    enabled: true
+
 jobs:
   testRegex:
     # Database type: postgres, mysql, mariadb
