@@ -167,6 +167,8 @@ func getBackupCommand(jobConfig *JobConfig) ([]string, string) {
 
 		// default to postgres user
 		pgUser := "postgres"
+
+		// if we have a custom user, use it
 		if jobConfig.Config["dbUser"] != "" {
 
 			log.Debugf("Using custom postgres user: %s", jobConfig.Config["dbUser"])
@@ -174,11 +176,17 @@ func getBackupCommand(jobConfig *JobConfig) ([]string, string) {
 		} else {
 			log.Debugf("Using default postgres user: %s", jobConfig.Config["dbUser"])
 		}
+		// add the user to the command
 		cmd = append(cmd, "-U", pgUser)
 
-		// if we have a password, we need to pass it to the command
+		// if we have a password, we need add the password flag
 		if jobConfig.Config["dbPassword"] != "" {
 			cmd = append(cmd, "--password")
+		}
+
+		// add additional args to the command
+		if jobConfig.Config["dbAdditionalArgs"] != "" {
+			cmd = append(cmd, jobConfig.Config["dbAdditionalArgs"])
 		}
 
 		// https://www.postgresql.org/docs/current/app-pg-dumpall.html
@@ -194,6 +202,7 @@ func getBackupCommand(jobConfig *JobConfig) ([]string, string) {
 	return []string{"echo", "Unknown db type"}, ""
 }
 
+// generate the backup file name
 func getBackupFileName(jobConfig *JobConfig, containerName string) string {
 	// currentTime := time.Now()
 

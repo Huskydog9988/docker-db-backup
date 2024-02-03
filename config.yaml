@@ -21,7 +21,7 @@ jobs:
     # postgres shouldn't need this, but mysql and mariadb will
     dbPassword: "postgres"
     # optional: allows you to specify additional arguments to pass to the dump cmd
-    additionalArgs: "--no-owner --no-acl"
+    dbAdditionalArgs: "--clean"
 
   # optional: you can specify multiple jobs
   textExact:
