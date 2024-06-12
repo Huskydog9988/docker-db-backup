@@ -163,7 +163,7 @@ func (b Backup) backupContainer(ctx context.Context, options *BackupContainerOpt
 func getBackupCommand(jobConfig *JobConfig) ([]string, string) {
 	if jobConfig.Config["dbType"] == "postgres" {
 
-		cmd := []string{"pg_dump"}
+		cmd := []string{"pg_dumpall"}
 
 		// default to postgres user
 		pgUser := "postgres"
